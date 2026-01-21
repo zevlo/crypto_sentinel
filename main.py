@@ -1,11 +1,12 @@
+import argparse
 import joblib
 import pandas as pd
 import sys
 from datetime import datetime, timezone
 from data_loader import fetch_data
 
-# --- CONFIG ---
-CONFIDENCE_THRESHOLD = 0.65
+DEFAULT_CONFIDENCE_THRESHOLD = 0.65
+DEFAULT_TICKER = "BTC-USD"
 
 # --- COLORS (ANSI Escape Codes) ---
 class Colors:
@@ -44,12 +45,12 @@ def get_market_context(current_row):
 
     return price, rsi, trend_str, vol_str, is_bullish
 
-def generate_reasoning(prob, rsi, is_bullish, bb_width):
+def generate_reasoning(prob, rsi, is_bullish, bb_width, confidence_threshold):
     """Generates a dynamic explanation based on indicators."""
     reasons = []
     
     # 1. Model Confidence Logic
-    if prob > CONFIDENCE_THRESHOLD:
+    if prob > confidence_threshold:
         reasons.append("Model detects high-probability upside patterns.")
     elif prob < 0.40:
         reasons.append("Model sees weak structure/downside risk.")
@@ -69,7 +70,7 @@ def generate_reasoning(prob, rsi, is_bullish, bb_width):
 
     return " ".join(reasons)
 
-def run_dashboard():
+def run_dashboard(ticker, confidence_threshold):
     # 1. Load Model
     try:
         model = joblib.load('model.pkl')
@@ -79,7 +80,7 @@ def run_dashboard():
 
     # 2. Fetch Data
     # print("Fetching market data...") # Commented out to keep dashboard clean
-    df = fetch_data()
+    df = fetch_data(ticker=ticker)
     current_data = df.iloc[[-1]].copy()
     
     # Features must match training
@@ -100,14 +101,20 @@ def run_dashboard():
     price, rsi, trend_str, vol_str, is_bullish = get_market_context(current_data)
     
     # Determine Signal
-    if bullish_prob > CONFIDENCE_THRESHOLD:
+    if bullish_prob > confidence_threshold:
         direction = f"{Colors.GREEN}LONG / BUY{Colors.ENDC} 🟢"
     elif bullish_prob < 0.40:
         direction = f"{Colors.RED}CASH / AVOID{Colors.ENDC} 🔴"
     else:
         direction = f"{Colors.YELLOW}HOLD / NEUTRAL{Colors.ENDC} ⚪"
 
-    reasoning = generate_reasoning(bullish_prob, rsi, is_bullish, current_data['BB_Width'].values[0])
+    reasoning = generate_reasoning(
+        bullish_prob,
+        rsi,
+        is_bullish,
+        current_data['BB_Width'].values[0],
+        confidence_threshold,
+    )
     
     # Format Reasoning for width (simple wrap)
     import textwrap
@@ -144,5 +151,18 @@ def run_dashboard():
     print(f"P&L:          $0.00")
     print("="*47 + "\n")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run the crypto swing strategist dashboard.")
+    parser.add_argument("--ticker", default=DEFAULT_TICKER, help="Ticker symbol to fetch data for.")
+    parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=DEFAULT_CONFIDENCE_THRESHOLD,
+        help="Model confidence threshold for bullish signals.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    run_dashboard()
+    args = parse_args()
+    run_dashboard(args.ticker, args.confidence_threshold)

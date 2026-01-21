@@ -1,12 +1,16 @@
+import argparse
 import pandas as pd
 from xgboost import XGBClassifier
 from sklearn.metrics import precision_score
 import joblib
 from data_loader import fetch_data, prepare_targets
 
-def train_model():
+DEFAULT_TICKER = "BTC-USD"
+
+
+def train_model(ticker):
     print("--- 1. Loading Data ---")
-    df = fetch_data()
+    df = fetch_data(ticker=ticker)
     df = prepare_targets(df)
     
     # Define features (Must match data_loader.py)
@@ -41,5 +45,12 @@ def train_model():
     joblib.dump(model, 'model.pkl')
     print("--- Model Saved to model.pkl ---")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train the crypto swing strategist model.")
+    parser.add_argument("--ticker", default=DEFAULT_TICKER, help="Ticker symbol to fetch data for.")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    train_model()
+    args = parse_args()
+    train_model(args.ticker)
